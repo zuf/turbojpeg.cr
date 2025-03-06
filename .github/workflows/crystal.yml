@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install turbojpeg
+      run: apt-get install libturbojpeg libturbojpeg0-dev
     - name: Install dependencies
       run: shards install
     - name: Run tests
