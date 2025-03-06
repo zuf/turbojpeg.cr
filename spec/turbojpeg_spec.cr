@@ -3,7 +3,139 @@ require "./spec_helper"
 describe TurboJPEG do
   # TODO: Write tests
 
-  it "encode works" do
+  context "class" do
+    it "should return scaling_factor" do
+      sf = TurboJPEG.scaling_factor(num: 7, denom: 8)
+      sf.num.should eq 7
+      sf.denom.should eq 8
+      sf.to_s.should eq "7/8"
+    end
+
+    it "should init with valid params" do
+      # withoud args (default to :transform)
+      TurboJPEG.new.should be_truthy
+
+      # with symbols
+      TurboJPEG.new(:compress).should be_truthy
+      TurboJPEG.new(:decompress).should be_truthy
+      TurboJPEG.new(:transform).should be_truthy
+
+      # with enums
+      TurboJPEG.new(TurboJPEG::InitType::COMPRESS).should be_truthy
+      TurboJPEG.new(TurboJPEG::InitType::DECOMPRESS).should be_truthy
+      TurboJPEG.new(TurboJPEG::InitType::TRANSFORM).should be_truthy
+    end
+
+    it "should decompress header" do
+      jpeg_file = File.join(File.dirname(__FILE__), "test_data", "gray_gradient.jpg")
+
+      File.size(jpeg_file).should be > 0
+
+      tj = TurboJPEG.new(:decompress)
+      tj.should be_truthy
+
+      # Should rise error for wrong file
+      expect_raises(File::NotFoundError) { tj.read_file("/tmp/non_existed/random/file.ppm") }
+
+      tj.read_file jpeg_file
+      tj.input_buffer.size.should eq(File.size(jpeg_file))
+
+      tj.width.should eq(256)
+      tj.height.should eq(256)
+      tj.get(:width).should eq(256)
+      tj.get(:height).should eq(256)
+      tj.subsamp.should eq(TurboJPEG::Samp::SAMP_GRAY)
+      tj.get(:subsamp).should eq(TurboJPEG::Samp::SAMP_GRAY.value)
+      tj.get(:jpegwidth).should eq(256)
+      tj.get(:jpegheight).should eq(256)
+      tj.get(:precision).should eq(8)
+      tj.get(:colorspace).should eq(TurboJPEG::Colorspace::GRAY.value)
+      tj.colorspace.should eq(TurboJPEG::Colorspace::GRAY)
+    end
+
+    it "should raise error for wrong params" do
+      tj = TurboJPEG.new
+      expect_raises(TurboJPEG::Error) { tj.set(:colorspace, 123) }
+    end
+
+    it "should decompress 8 bpp image" do
+      jpeg_file = File.join(File.dirname(__FILE__), "test_data", "gray_gradient.jpg")
+      File.size(jpeg_file).should be > 0
+
+      tj = TurboJPEG.new(:decompress)
+      tj.should be_truthy
+
+      tj.read_file jpeg_file
+      buf = Bytes.new(256*256*3)
+      buf = tj.decompress(buf)
+      buf.size.should eq 256*256*3
+
+      uncompressed_tempfile = File.tempfile("test_", ".ppm")
+      begin
+        tj.save_image8(buf, uncompressed_tempfile.path)
+        File.size(uncompressed_tempfile.path).should be > buf.size
+        # TODO: Instead expected_ppm_header use StringScanner or regex.
+        # Because PPM can be delimited by differend kind of spaces.
+        expected_ppm_header = "P6\n#{tj.scaled_width} #{tj.scaled_height}\n255\n"
+        File.open(uncompressed_tempfile.path, "rb") { |f| f.gets(delimiter: Char::ZERO, limit: expected_ppm_header.size).should eq(expected_ppm_header) }
+        expect_raises(TurboJPEG::Error) { tj.save_image8(buf, "/tmp/non_existed/random/file.ppm") }
+      ensure
+        uncompressed_tempfile.delete
+      end
+    end
+
+    it "should allow to set scaling_factor" do
+      jpeg_file = File.join(File.dirname(__FILE__), "test_data", "gray_gradient.jpg")
+      File.size(jpeg_file).should be > 0
+
+      tj = TurboJPEG.new(:decompress)
+      tj.should be_truthy
+      tj.set_scaling_factor 1, 2
+
+      tj.read_file jpeg_file
+      tj.width.should eq(256)
+      tj.height.should eq(256)
+      tj.get(:width).should eq(256)
+      tj.get(:height).should eq(256)
+
+      tj.scaled_width.should eq(128)
+      tj.scaled_height.should eq(128)
+
+      tj.scaling_factor.num.should eq(1)
+      tj.scaling_factor.denom.should eq(2)
+
+      buf = Bytes.new(128*128*3)
+      buf = tj.decompress(buf)
+      buf.size.should eq 128*128*3
+
+      uncompressed_tempfile = File.tempfile("test_", ".ppm")
+      begin
+        tj.save_image8(buf, uncompressed_tempfile.path)
+        File.size(uncompressed_tempfile.path).should be > buf.size
+        # TODO: Instead expected_ppm_header use StringScanner or regex.
+        # Because PPM can be delimited by differend kind of spaces.
+        expected_ppm_header = "P6\n#{tj.scaled_width} #{tj.scaled_height}\n255\n"
+        File.open(uncompressed_tempfile.path, "rb") { |f| f.gets(delimiter: Char::ZERO, limit: expected_ppm_header.size).should eq(expected_ppm_header) }
+        expect_raises(TurboJPEG::Error) { tj.save_image8(buf, "/tmp/non_existed/random/file.ppm") }
+      ensure
+        uncompressed_tempfile.delete
+      end
+
+      tj.set_scaling_factor 1, 8
+      tj.width.should eq(256)
+      tj.height.should eq(256)
+      tj.get(:width).should eq(256)
+      tj.get(:height).should eq(256)
+
+      tj.scaled_width.should eq(256//8)
+      tj.scaled_height.should eq(256//8)
+
+      expect_raises(TurboJPEG::Error) { tj.set_scaling_factor 1, 1024*1024 }
+      expect_raises(TurboJPEG::Error) { tj.set_scaling_factor 1, -88888 }
+    end
+  end
+
+  it "encode work with lowlevel bindings" do
     img_side = 256 # image side size
 
     # Fill image buffer with simpl grayscale gradient
@@ -11,7 +143,7 @@ describe TurboJPEG do
 
     # Init TurboJPEG context
     handle = LibTurboJPEG.tj3Init(LibTurboJPEG::TJINIT::TJINIT_COMPRESS)
-    handle.should_not be_nil
+    handle.should be_truthy
 
     # Set color sampling and jpeg quality
     ret = LibTurboJPEG.tj3Set(handle, LibTurboJPEG::TJPARAM::TJPARAM_SUBSAMP, LibTurboJPEG::TJSAMP::TJSAMP_GRAY)
@@ -39,7 +171,7 @@ describe TurboJPEG do
     LibTurboJPEG.tj3Destroy(handle)
   end
 
-  it "decode works" do
+  it "decode works with lowlevel bindings" do
     uncompressed_tempfile = File.tempfile("test_", ".ppm")
     out_file = uncompressed_tempfile.path
     jpeg_tempfile = File.tempfile("test_", ".jpg")
@@ -53,7 +185,7 @@ describe TurboJPEG do
 
       # Init TurboJPEG context
       handle = LibTurboJPEG.tj3Init(LibTurboJPEG::TJINIT::TJINIT_COMPRESS)
-      handle.should_not be_nil
+      handle.should be_truthy
 
       # Set color sampling and jpeg quality
       ret = LibTurboJPEG.tj3Set(handle, LibTurboJPEG::TJPARAM::TJPARAM_SUBSAMP, LibTurboJPEG::TJSAMP::TJSAMP_GRAY)
@@ -84,7 +216,7 @@ describe TurboJPEG do
       LibTurboJPEG.tj3Free(out_buffer)
       LibTurboJPEG.tj3Destroy(handle)
 
-      ## Decode part
+      # # Decode part
 
       file_size = File.size(jpeg_file)
 

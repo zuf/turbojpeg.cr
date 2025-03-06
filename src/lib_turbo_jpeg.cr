@@ -233,7 +233,7 @@ lib LibTurboJPEG
   type TJHandle = Void*
 
   # Create a new TurboJPEG instance.
-  fun tj3Init(initType : Int32) : TJHandle
+  fun tj3Init(initType : TJINIT) : TJHandle
 
   # Destroy a TurboJPEG instance.
   fun tj3Destroy(tjhandle : TJHandle)
