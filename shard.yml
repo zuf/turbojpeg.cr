@@ -1,0 +1,9 @@
+name: turbojpeg
+version: 0.1.0
+
+authors:
+  - Egor Vakhromtsev <e.vakhromtsev@gmail.com>
+
+crystal: '>= 1.15.1'
+
+license: MIT
