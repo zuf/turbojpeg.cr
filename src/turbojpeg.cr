@@ -197,7 +197,7 @@ class TurboJPEG
     TurboJPEG::Samp.from_value get(:subsamp)
   end
 
-  def subsamp(samp : TurboJPEG::Samp)
+  def subsamp=(samp : TurboJPEG::Samp)
     set :subsamp, LibTurboJPEG::TJSAMP.from_value(samp.value)
   end
 
@@ -275,9 +275,9 @@ class TurboJPEG
     raise TurboJPEG::Error.new("JPEG decompress error: #{last_error}") if ret != 0
   end
 
-  def to_unsafe
-    @handle
-  end
+  # def to_unsafe
+  #   @handle
+  # end
 
   def last_error
     "#{String.new(LibTurboJPEG.tj3GetErrorStr(@handle))} (error code: #{LibTurboJPEG.tj3GetErrorCode(@handle)})"

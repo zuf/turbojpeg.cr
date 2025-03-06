@@ -4,6 +4,10 @@ describe TurboJPEG do
   # TODO: Write tests
 
   context "class" do
+    it "should return no error for last_error" do
+      TurboJPEG.last_error.should contain("No error")
+    end
+
     it "should return scaling_factor" do
       sf = TurboJPEG.scaling_factor(num: 7, denom: 8)
       sf.num.should eq 7
@@ -72,7 +76,7 @@ describe TurboJPEG do
 
       uncompressed_tempfile = File.tempfile("test_", ".ppm")
       begin
-        tj.save_image8(buf, uncompressed_tempfile.path)
+        tj.save_image(buf, uncompressed_tempfile.path)
         File.size(uncompressed_tempfile.path).should be > buf.size
         # TODO: Instead expected_ppm_header use StringScanner or regex.
         # Because PPM can be delimited by differend kind of spaces.
