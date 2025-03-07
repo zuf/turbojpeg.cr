@@ -4,14 +4,43 @@ class TurboJPEG
   VERSION = "0.1.1"
 end
 
+# Base TurboJPEG error
 class TurboJPEG::Exception < Exception; end
 
+# Common TurboJPEG error
 class TurboJPEG::Error < TurboJPEG::Exception; end
 
+# Class-level TurboJPEG error (some class method can raise it)
 class TurboJPEG::ClassError < TurboJPEG::Exception; end
 
+# Initialization TurboJPEG error (can be raised from constructors only)
 class TurboJPEG::InitError < TurboJPEG::ClassError; end
 
+# Main TurboJPEG wrapper class
+# For low level binding see `LibTurboJPEG`
+#
+# Original TurboJPEG (libjpeg-turbo) docs:
+#   * [TurboJPEG C API 3.1](https://rawcdn.githack.com/libjpeg-turbo/libjpeg-turbo/main/doc/turbojpeg/group___turbo_j_p_e_g.html)
+#   * [libjpeg-turbo.org](https://libjpeg-turbo.org/)
+#
+# ### Basic usage
+#
+# Decompress jpeg file:
+#
+# ```
+# tj = TurboJPEG.new(:decompress)
+# tj.read_file "/path/pic.jpg"
+#
+# puts "JPEG size: #{tj.width}x#{tj.height} #{tj.subsamp}"
+#
+# # decompress jpeg image to buf
+# buf = Bytes.new(tj.width*tj.height*3)
+# tj.decompress(buf)
+#
+# # save to umcompressed file
+# tj.save_image(buf, "/path/pic.ppm")
+# ```
+#
 class TurboJPEG
   @handle : LibTurboJPEG::TJHandle
   @input_buffer : Bytes?
@@ -22,13 +51,23 @@ class TurboJPEG
   getter! input_buffer
   getter! scaling_factor
 
+  # Initialization options
   enum InitType
-    COMPRESS   = LibTurboJPEG::TJINIT::TJINIT_COMPRESS
+    # Initialize the TurboJPEG instance for compression
+    COMPRESS = LibTurboJPEG::TJINIT::TJINIT_COMPRESS
+    # Initialize the TurboJPEG instance for decompression
     DECOMPRESS = LibTurboJPEG::TJINIT::TJINIT_DECOMPRESS
-    TRANSFORM  = LibTurboJPEG::TJINIT::TJINIT_TRANSFORM
+    # Initialize the TurboJPEG instance for lossless transformation (both compression and decompression)
+    TRANSFORM = LibTurboJPEG::TJINIT::TJINIT_TRANSFORM
   end
 
+  # TurboJPEG parameters can me set via `TurboJPEG#set` method or shortcut-methods like `TurboJPEG##width=`, `TurboJPEG##height=` or `TurboJPEG##subsamp`
   enum Param
+    # Error handling behavior
+    #
+    # Value:
+    # * `0` __[default]__ Allow the current compression/decompression/transform operation to complete unless a fatal error is encountered.
+    # * `1` Immediately discontinue the current compression/decompression/transform operation if a warning (non-fatal error) occurs.
     STOPONWARNING = LibTurboJPEG::TJPARAM::TJPARAM_STOPONWARNING
     BOTTOMUP      = LibTurboJPEG::TJPARAM::TJPARAM_BOTTOMUP
     NOREALLOC     = LibTurboJPEG::TJPARAM::TJPARAM_NOREALLOC
@@ -120,6 +159,7 @@ class TurboJPEG
     ScalingFactor.new(num, denom)
   end
 
+  # Create a new TurboJPEG instance
   def initialize(init_type : InitType = InitType::TRANSFORM)
     @scaling_factor = ScalingFactor.unscaled
     @mmap_view = Pointer(Void).null
@@ -213,12 +253,14 @@ class TurboJPEG
     set(:colorspace, LibTurboJPEG::TJCS.from_value(cs))
   end
 
+  # Get the value of a parameter
   def get(param : Param)
     val = LibTurboJPEG.tj3Get(@handle, LibTurboJPEG::TJPARAM.from_value(param.value))
     raise TurboJPEG::Error.new("Value for #{param} is unknown: #{last_error}") if val == -1
     val
   end
 
+  # Set the value of a parameter
   def set(param : Param, value)
     ret = LibTurboJPEG.tj3Set(@handle, LibTurboJPEG::TJPARAM.from_value(param.value), value)
     raise TurboJPEG::Error.new("Cant set #{param} = #{value}: #{last_error}") if ret == -1
@@ -279,10 +321,12 @@ class TurboJPEG
   #   @handle
   # end
 
+  # Returns a descriptive error message explaining why the last command failed (for given instance)
   def last_error
     "#{String.new(LibTurboJPEG.tj3GetErrorStr(@handle))} (error code: #{LibTurboJPEG.tj3GetErrorCode(@handle)})"
   end
 
+  # Returns a descriptive error message explaining why the last command failed (on lib level)
   def self.last_error
     "#{String.new(LibTurboJPEG.tj3GetErrorStr(nil))} (error code: #{LibTurboJPEG.tj3GetErrorCode(nil)})"
   end
